@@ -1,7 +1,7 @@
 {% extends 'search/base.html' %}
 
 {% block meta %}
-    <title>Intelli Search: {{ doc_id }}</title> <!-- Updated title to include app name -->
+    <title>Intelli Search: {{ doc_id }}</title>
 {% endblock meta %}
 
 {% block content %}
@@ -22,17 +22,17 @@
                     </div>
                     <div class="col-2 me-2">
                         <select name="num_results" class="form-select rounded-pill me-2">
-                            <option value="5">5</option>
-                            <option value="10">10</option>
-                            <option value="20">20</option>
-                            <option value="30" selected>30</option> <!-- Changed default to 30 -->
-                            <option value="50">50</option>
-                            <option value="100">100</option>
+                            <option value="5" {% if num_results == '5' %}selected{% endif %}>5</option>
+                            <option value="10" {% if num_results == '10' %}selected{% endif %}>10</option>
+                            <option value="20" {% if num_results == '20' %}selected{% endif %}>20</option>
+                            <option value="30" {% if num_results == '30' %}selected{% endif %}>30</option>
+                            <option value="50" {% if num_results == '50' %}selected{% endif %}>50</option>
+                            <option value="100" {% if num_results == '100' %}selected{% endif %}>100</option>
                         </select>
                     </div>
                     <div class="input-group-append">
-                        <button class="btn btn-outline-primary rounded-pill" type="submit"> <!-- Changed to 'primary' for blue color -->
-                            <i class="fa fa-search" style="font-size:24px; color: blue;"></i> <!-- Changed icon color to blue -->
+                        <button class="btn btn-outline-primary rounded-pill" type="submit">
+                            <i class="fa fa-search" style="font-size:24px; color: blue;"></i>
                         </button>
                     </div>
                 </div>
@@ -45,7 +45,7 @@
 <div class="container" style="margin-top: 150px;">
     <!-- Title container -->
     <div class="title-container justify-content-center" style="text-align: center;">
-        <h1 style="color: blue;">{{ title1 }}</h1> <!-- Changed color to blue -->
+        <h1 style="color: blue;">{{ title1 }}</h1>
         <h5>{{ title2 }}</h5>
     </div>
 
@@ -57,5 +57,4 @@
         <p>{{ content }}</p>
     </div>
 </div>
-
 {% endblock content %}

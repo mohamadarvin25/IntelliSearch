@@ -2,13 +2,14 @@
 
 Tugas Pemrograman 4 - TBI
 
-<!-- [Link Deployment](http://34.105.89.229:8001/) -->
+[Link Deployment](http://34.56.130.44:8000/)
 
-<!-- Karena file model yang digunakan terlalu besar, maka kami tidak menguploadnya ke github. Untuk file model dapat diunduh di [sini](https://drive.google.com/drive/folders/1DNfkZskujfYG9P5-vlvL-xxfv_YJiJnA). Setelah diunduh, file model dapat diletakkan di folder `/search/letor/` -->
+Karena file model yang digunakan terlalu besar, maka saya tidak menguploadnya ke github. Untuk file model dapat diunduh di [sini](https://drive.google.com/drive/folders/16oB6mC-WPEa2kpwgQ512y94mnXISk_gS?usp=sharing). Setelah diunduh, file model dapat diletakkan di folder `/search/letor/`
  
 ## Anggota Kelompok
 
-- 2006596996 Mohamad Arvin Fadriansyah 
+
+- 2006596996 Mohamad Arvin Fadriansyah
 
 ---
 Cara menjalankan aplikasi:

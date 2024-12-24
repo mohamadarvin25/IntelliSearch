@@ -1,5 +1,3 @@
-
-
 import os
 import pickle
 import random
@@ -22,6 +20,7 @@ def load_documents(file_path):
     documents = {}
     # Construct absolute path
     abs_path = os.path.join(os.path.dirname(__file__), file_path)
+    abs_path = os.path.normpath(abs_path)  # Normalize path separators
     if not os.path.isfile(abs_path):
         raise FileNotFoundError(f"The file {abs_path} does not exist.")
     with open(abs_path, 'r', encoding='utf-8') as file:
@@ -39,6 +38,7 @@ def load_queries(file_path):
     """Load queries from a file."""
     queries = {}
     abs_path = os.path.join(os.path.dirname(__file__), file_path)
+    abs_path = os.path.normpath(abs_path)  # Normalize path separators
     if not os.path.isfile(abs_path):
         raise FileNotFoundError(f"The file {abs_path} does not exist.")
     with open(abs_path, 'r', encoding='utf-8') as file:
@@ -55,6 +55,7 @@ def load_relevance_judgments(file_path, queries, documents):
     """Load relevance judgments from a file."""
     q_docs_rel = {}  # Grouping by q_id
     abs_path = os.path.join(os.path.dirname(__file__), file_path)
+    abs_path = os.path.normpath(abs_path)  # Normalize path separators
     if not os.path.isfile(abs_path):
         raise FileNotFoundError(f"The file {abs_path} does not exist.")
     with open(abs_path, 'r', encoding='utf-8') as file:
@@ -147,18 +148,62 @@ def predict_ranking(query, docs, ranker, lsi_model, dictionary):
     scores = ranker.predict(X_unseen)
     return scores
 
+def get_relative_path(doc_path):
+    """
+    Extract the relative path after the 'search' directory.
+    Converts Windows-style paths to Unix-style paths.
+    """
+    # Normalize path separators
+    doc_path = doc_path.replace('\\', '/')
+    search_dir = 'search'
+    search_index = doc_path.find(search_dir)
+    if search_index != -1:
+        # Extract the path after 'search'
+        relative_path = doc_path[search_index + len(search_dir):]
+        relative_path = relative_path.lstrip('/\\')  # Remove leading slashes
+        return relative_path
+    else:
+        # If 'search' is not found, assume the entire path is relative
+        return doc_path
+
 def load_document_content(doc_path):
-    """Load and split document content."""
-    path = os.path.join(os.path.dirname(__file__), doc_path)
+    """Load and split document content with path normalization."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Extract the relative path
+    relative_path = get_relative_path(doc_path)
+    
+    # Construct the absolute Unix path
+    path = os.path.join(base_dir, relative_path)
+    path = os.path.normpath(path)  # Normalize path separators again
+    
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"The file {path} does not exist.")
+    
     with open(path, 'r', encoding='utf-8') as file:
         return file.read().split()
 
 def prepare_docs(SERP):
-    """Prepare documents for reranking."""
+    """Prepare documents for reranking with path normalization."""
     docs = []
     for score, doc_path in SERP:
-        doc_content = load_document_content(doc_path)
-        docs.append((doc_path, ' '.join(doc_content)))
+        try:
+            # Extract the relative path
+            relative_path = get_relative_path(doc_path)
+            
+            # Construct the absolute Unix path
+            path = os.path.join(os.path.dirname(__file__), relative_path)
+            path = os.path.normpath(path)  # Normalize path separators again
+            
+            if not os.path.isfile(path):
+                print(f"Document not found: {path}")
+                continue
+            
+            doc_content = load_document_content(path)
+            docs.append((path, ' '.join(doc_content)))
+        except Exception as e:
+            print(f"Error processing document {doc_path}: {e}")
+            continue
     return docs
 
 # ---------------------------
@@ -273,110 +318,21 @@ def train_models(train_dataset, train_group_qid_count, val_queries, val_q_docs_r
 # Reranking Function
 # ---------------------------
 
-# # NOn Absolute
-# def rerank_search_results(search_query, top_k=100):
-#     """Rerank search results using the trained ranker."""
-#     # Paths for models
-#     lsi_model_file = 'letor/lsi_model.pkl'
-#     ranker_file = 'letor/lgb_ranker_lsi_model.pkl'
-
-#     # Ensure model directory exists
-#     if not os.path.exists('letor/'):
-#         os.makedirs('letor/')
-
-#     # Load documents
-#     documents = load_documents('qrels-folder/train_docs.txt')
-
-#     # Initialize and load BSBIIndex
-#     BSBI_instance = BSBIIndex(
-#         data_dir=os.path.join(os.path.dirname(__file__), "collections"),
-#         postings_encoding=VBEPostings,
-#         output_dir=os.path.join(os.path.dirname(__file__), "index")
-#     )
-#     BSBI_instance.load()
-
-#     # Retrieve SERP using BM25
-#     SERP = BSBI_instance.retrieve_bm25(search_query, k=top_k)
-#     if SERP == []:
-#         print("No search results found.")
-#         return []
-
-#     # Training phase
-#     if not os.path.isfile(lsi_model_file) or not os.path.isfile(ranker_file):
-#         print("\nTraining new models as saved models do not exist.")
-        
-#         # Load training data
-#         print("Loading training data...")
-#         queries_train = load_queries('qrels-folder/train_queries.txt')
-#         q_docs_rel_train = load_relevance_judgments('qrels-folder/train_qrels.txt', queries_train, documents)
-#         train_dataset, train_group_qid_count = create_dataset(queries_train, documents, q_docs_rel_train)
-        
-#         # Load validation data
-#         print("Loading validation data...")
-#         queries_val = load_queries('qrels-folder/val_queries.txt')
-#         q_docs_rel_val = load_relevance_judgments('qrels-folder/val_qrels.txt', queries_val, documents)
-        
-#         # Create LSI model
-#         NUM_LATENT_TOPICS = 200
-#         print(f"Creating LSI model with {NUM_LATENT_TOPICS} latent topics...")
-#         lsi_model, dictionary = create_lsi_model(documents, num_topics=NUM_LATENT_TOPICS)
-        
-#         # Train and tune models
-#         print("Creating feature vectors for training data...")
-#         ranker, best_params = train_models(train_dataset, train_group_qid_count, queries_val, q_docs_rel_val, documents, lsi_model, dictionary)
-        
-#         # Save models
-#         print("\nSaving trained models...")
-#         with open(lsi_model_file, 'wb') as f:
-#             pickle.dump((lsi_model, dictionary), f)
-#         with open(ranker_file, 'wb') as f:
-#             pickle.dump(ranker, f)
-#     else:
-#         # Load pre-trained models
-#         print("\nLoading pre-trained models...")
-#         with open(lsi_model_file, 'rb') as f:
-#             lsi_model, dictionary = pickle.load(f)
-#         with open(ranker_file, 'rb') as f:
-#             ranker = pickle.load(f)
-
-#     # Testing phase with test_qrels
-#     print("\nTesting with test_qrels...")
-#     queries_test = load_queries('qrels-folder/test_queries.txt')
-#     q_docs_rel_test = load_relevance_judgments('qrels-folder/test_qrels.txt', queries_test, documents)
-
-#     test_dataset, test_group_qid_count = create_dataset(queries_test, documents, q_docs_rel_test)
-#     X_test, Y_test = create_feature_vectors(test_dataset, lsi_model, dictionary)
-#     Y_pred_test = ranker.predict(X_test)
-
-#     test_ndcg = calculate_ndcg(Y_test, Y_pred_test, test_group_qid_count)
-#     print(f"Test NDCG: {test_ndcg:.4f}")
-
-#     # Prepare documents for reranking
-#     print("\nPreparing documents for reranking...")
-#     docs = prepare_docs(SERP)
-#     scores = predict_ranking(search_query, docs, ranker, lsi_model, dictionary)
-
-#     # Rerank SERP
-#     reranked_SERP = sorted(zip(scores, [doc_path for doc_path, _ in docs]), key=lambda x: x[0], reverse=True)
-
-#     return reranked_SERP
-
-# Absolute path
 def rerank_search_results(search_query, top_k=100):
     """Rerank search results using the trained ranker."""
     # Get absolute paths for models
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    lsi_model_file = os.path.join(base_dir, 'letor/lsi_model.pkl')
-    ranker_file = os.path.join(base_dir, 'letor/lgb_ranker_lsi_model.pkl')
-    letor_dir = os.path.join(base_dir, 'letor/')
-
+    lsi_model_file = os.path.join(base_dir, 'letor', 'lsi_model.pkl')
+    ranker_file = os.path.join(base_dir, 'letor', 'lgb_ranker_lsi_model.pkl')
+    letor_dir = os.path.join(base_dir, 'letor')
+    
     # Ensure model directory exists
     if not os.path.exists(letor_dir):
         os.makedirs(letor_dir)
-
+    
     # Load documents with absolute path
-    documents = load_documents(os.path.join(base_dir, 'qrels-folder/train_docs.txt'))
-
+    documents = load_documents(os.path.join(base_dir, 'qrels-folder', 'train_docs.txt'))
+    
     # Initialize and load BSBIIndex with absolute paths
     BSBI_instance = BSBIIndex(
         data_dir=os.path.join(base_dir, "collections"),
@@ -384,53 +340,73 @@ def rerank_search_results(search_query, top_k=100):
         output_dir=os.path.join(base_dir, "index")
     )
     BSBI_instance.load()
-
-    # Rest of the function remains the same, but update paths to be absolute
+    
+    # Retrieve SERP using BM25
     SERP = BSBI_instance.retrieve_bm25(search_query, k=top_k)
     if SERP == []:
         print("No search results found.")
         return []
-
+    
+    # Training phase
     if not os.path.isfile(lsi_model_file) or not os.path.isfile(ranker_file):
         print("\nTraining new models as saved models do not exist.")
         
-        # Absolute Path
-        queries_train = load_queries(os.path.join(base_dir, 'qrels-folder/train_queries.txt'))
-        q_docs_rel_train = load_relevance_judgments(os.path.join(base_dir, 'qrels-folder/train_qrels.txt'), queries_train, documents)
+        # Load training data
+        print("Loading training data...")
+        queries_train = load_queries(os.path.join(base_dir, 'qrels-folder', 'train_queries.txt'))
+        q_docs_rel_train = load_relevance_judgments(os.path.join(base_dir, 'qrels-folder', 'train_qrels.txt'), queries_train, documents)
         train_dataset, train_group_qid_count = create_dataset(queries_train, documents, q_docs_rel_train)
         
-        queries_val = load_queries(os.path.join(base_dir, 'qrels-folder/val_queries.txt'))
-        q_docs_rel_val = load_relevance_judgments(os.path.join(base_dir, 'qrels-folder/val_qrels.txt'), queries_val, documents)
+        # Load validation data
+        print("Loading validation data...")
+        queries_val = load_queries(os.path.join(base_dir, 'qrels-folder', 'val_queries.txt'))
+        q_docs_rel_val = load_relevance_judgments(os.path.join(base_dir, 'qrels-folder', 'val_qrels.txt'), queries_val, documents)
         
+        # Create LSI model
         NUM_LATENT_TOPICS = 200
+        print(f"Creating LSI model with {NUM_LATENT_TOPICS} latent topics...")
         lsi_model, dictionary = create_lsi_model(documents, num_topics=NUM_LATENT_TOPICS)
         
+        # Train and tune models
+        print("Creating feature vectors for training data...")
         ranker, best_params = train_models(train_dataset, train_group_qid_count, queries_val, q_docs_rel_val, documents, lsi_model, dictionary)
         
+        # Save models
+        print("\nSaving trained models...")
         with open(lsi_model_file, 'wb') as f:
             pickle.dump((lsi_model, dictionary), f)
         with open(ranker_file, 'wb') as f:
             pickle.dump(ranker, f)
     else:
+        # Load pre-trained models
+        print("\nLoading pre-trained models...")
         with open(lsi_model_file, 'rb') as f:
             lsi_model, dictionary = pickle.load(f)
         with open(ranker_file, 'rb') as f:
             ranker = pickle.load(f)
-
-    queries_test = load_queries(os.path.join(base_dir, 'qrels-folder/test_queries.txt'))
-    q_docs_rel_test = load_relevance_judgments(os.path.join(base_dir, 'qrels-folder/test_qrels.txt'), queries_test, documents)
-
+    
+    # Testing phase with test_qrels
+    print("\nTesting with test_qrels...")
+    queries_test = load_queries(os.path.join(base_dir, 'qrels-folder', 'test_queries.txt'))
+    q_docs_rel_test = load_relevance_judgments(os.path.join(base_dir, 'qrels-folder', 'test_qrels.txt'), queries_test, documents)
+    
     test_dataset, test_group_qid_count = create_dataset(queries_test, documents, q_docs_rel_test)
     X_test, Y_test = create_feature_vectors(test_dataset, lsi_model, dictionary)
     Y_pred_test = ranker.predict(X_test)
-
+    
     test_ndcg = calculate_ndcg(Y_test, Y_pred_test, test_group_qid_count)
     print(f"Test NDCG: {test_ndcg:.4f}")
-
+    
+    # Prepare documents for reranking
+    print("\nPreparing documents for reranking...")
     docs = prepare_docs(SERP)
+    if not docs:
+        print("No valid documents to rerank.")
+        return []
+    
     scores = predict_ranking(search_query, docs, ranker, lsi_model, dictionary)
     reranked_SERP = sorted(zip(scores, [doc_path for doc_path, _ in docs]), key=lambda x: x[0], reverse=True)
-
+    
     return reranked_SERP
 
 # ---------------------------
@@ -445,23 +421,22 @@ def main():
     print("Query: ", search_query)
     
     # Initialize and load BSBIIndex for TF-IDF retrieval
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     BSBI_instance = BSBIIndex(
-        data_dir='collections',
+        data_dir=os.path.join(base_dir, 'collections'),
         postings_encoding=VBEPostings,
-        output_dir='index'
+        output_dir=os.path.join(base_dir, 'index')
     )
     BSBI_instance.load()
     SERP = BSBI_instance.retrieve_tfidf(search_query, k=10)
-
+    
     print("\n--- Initial SERP (TF-IDF) ---")
     for score, doc_id in SERP:
         print(f"{doc_id}: {score}")
-
+    
     print("\n--- Reranked SERP ---")
     for rank, (score, doc_id) in enumerate(reranked_results, start=1):
         print(f"Rank {rank}: {doc_id} with score {score:.4f}")
 
 if __name__ == "__main__":
     main()
-
-
